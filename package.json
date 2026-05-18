@@ -8,11 +8,12 @@
     "pi-package",
     "pi-extension",
     "pi",
-    "extension",
+    "pi-coding-agent",
     "retry",
     "error-recovery",
     "empty-response",
-    "pi-coding-agent"
+    "fallback",
+    "rate-limit"
   ],
   "scripts": {
     "build": "tsc",

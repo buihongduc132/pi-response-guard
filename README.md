@@ -1,30 +1,29 @@
 # pi-response-guard
 
 [![npm version](https://img.shields.io/npm/v/pi-response-guard)](https://www.npmjs.com/package/pi-response-guard)
-[![npm downloads](https://img.shields.io/npm/dm/pi-response-guard)](https://www.npmjs.com/package/pi-response-guard)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
-A [pi](https://pi.dev) extension that auto-recovers from empty, errored, or interrupted model responses.
-
-When a model returns an empty response (0 output tokens), hits a rate limit, gets disconnected mid-stream, or stops without visible output — `pi-response-guard` automatically sends a configurable retry message like `continue` so the session doesn't stall.
-
-## Why?
-
-Pi's built-in retry only covers `stopReason === "error"`. When a provider returns `stopReason: "stop"` with 0 output tokens (e.g., due to rate limiting through a proxy like LiteLLM), pi treats it as a successful response and waits for user input. This extension detects that case and auto-recovers.
+Auto-recovery for empty, errored, or interrupted model responses in [pi](https://pi.dev).
 
 ## Features
 
-- **Empty response detection**: Catches `stopReason: "stop"` with 0 output tokens (rate limit / proxy failures)
-- **Error pattern matching**: Configurable substring patterns for `stopReason: "error"` (rate limit, fetch failed, ECONNRESET, etc.)
-- **Length limit**: Auto-continues when model hits max output tokens
-- **Thinking-only stop**: Continues when model only emitted thinking content
-- **Silent stop**: Continues when model stops after user/tool message with no visible output
-- **Retry limit**: Configurable max consecutive retries (default: 10)
-- **UI notifications**: Shows when auto-retry happens
+- **Empty response detection** — catches `stopReason: "stop"` with 0 output tokens (rate limit / proxy failures)
+- **Auto-retry** — sends a configurable retry message so the session never stalls
+- **Rate limit recovery** — matches 429, rate limit, usage limit, and other provider error patterns
+- **Token overflow handling** — auto-continues when the model hits max output tokens (`stopReason: "length"`)
+- **7 detection cases** — covers error patterns, length limits, thinking-only stops, silent stops after user/tool/auto-retry, and zero-token empty responses
 
 ## Installation
 
-Add to your pi `settings.json`:
+### For Humans
+
+```bash
+npm install pi-response-guard
+```
+
+### For AI Agents
+
+Add to your pi `settings.json` packages array:
 
 ```json
 {
@@ -32,11 +31,33 @@ Add to your pi `settings.json`:
 }
 ```
 
-Or install globally:
+Install and configure pi-response-guard by following: https://raw.githubusercontent.com/buihongduc132/pi-response-guard/refs/heads/main/README.md
 
-```bash
-npm install -g pi-response-guard
+### For pi (git-sourced)
+
+Add to your pi `settings.json` packages array:
+
+```json
+{
+  "packages": ["https://github.com/buihongduc132/pi-response-guard"]
+}
 ```
+
+## Usage
+
+`pi-response-guard` runs automatically once installed — no configuration required. It listens to every assistant message and detects retryable conditions:
+
+| # | Condition | Description |
+|---|-----------|-------------|
+| 1 | **Error pattern match** | `stopReason: "error"` with a message matching configured error substrings (rate limit, fetch failed, ECONNRESET, etc.) |
+| 2 | **Token overflow** | `stopReason: "length"` — model hit max output tokens |
+| 3 | **Thinking-only stop** | Model stopped after emitting only thinking content, with no visible output |
+| 4 | **Silent stop after user** | Model stopped after a user message with no visible output |
+| 5 | **Silent stop after tool** | Model stopped after a tool result with no visible output |
+| 6 | **Silent stop after auto-retry** | Consecutive empty response following an automatic retry |
+| 7 | **Zero-token empty response** | `stopReason: "stop"` with `usage.output === 0` — rate limit or proxy failure |
+
+When detected, the extension sends a configurable retry message (default: `"continue"`) up to a maximum number of consecutive retries.
 
 ## Configuration
 
@@ -63,22 +84,6 @@ Or create a project-level config at `.pi-response-guard.json` or `.pi/pi-respons
 | `autoContinueOnSilentStopAfterTool` | `boolean` | `true` | Retry on silent stop after user/tool |
 | `autoContinueOnEmptyResponse` | `boolean` | `true` | Retry on 0 output token responses |
 | `errorPatterns` | `string[]` | *(see config.json)* | Substrings to match in error messages |
-
-## Detection Cases
-
-| # | Condition | Detection |
-|---|-----------|-----------|
-| 1 | `stopReason: "error"` + matching error pattern | Configurable substring match |
-| 2 | `stopReason: "length"` | Hit max output tokens |
-| 3 | `stopReason: "stop"` + thinking-only content | No text or tool calls |
-| 4 | `stopReason: "stop"` + empty after user message | No visible output |
-| 5 | `stopReason: "stop"` + empty after tool result | No visible output |
-| 6 | `stopReason: "stop"` + empty after auto-retry | Consecutive empty response |
-| 7 | `stopReason: "stop"` + `usage.output === 0` | **NEW**: Rate limit / proxy failure |
-
-## Credits
-
-Inspired by [pi-hodor](https://github.com/vurihuang/pi-hodor) by vurihuang, with additional detection for rate-limit empty responses.
 
 ## License
 
