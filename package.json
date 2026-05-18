@@ -11,7 +11,8 @@
     "extension",
     "retry",
     "error-recovery",
-    "empty-response"
+    "empty-response",
+    "pi-coding-agent"
   ],
   "scripts": {
     "build": "tsc",
