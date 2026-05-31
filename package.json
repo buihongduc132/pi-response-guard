@@ -9,11 +9,9 @@
     "pi-extension",
     "pi",
     "pi-coding-agent",
-    "retry",
-    "error-recovery",
-    "empty-response",
-    "fallback",
-    "rate-limit"
+    "response-guard",
+    "quality",
+    "validation"
   ],
   "scripts": {
     "build": "tsc",
