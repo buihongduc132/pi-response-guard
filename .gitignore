@@ -2,3 +2,15 @@ node_modules/
 dist/
 coverage/
 *.tgz
+.fusion/
+.claude/
+.sg-rules/
+.sg-sha
+.sgignore
+sgconfig.yml
+.hindsight.json
+.gitnexus/
+.gitnexusignore
+.bug-hunter/
+AGENTS.md
+CLAUDE.md
