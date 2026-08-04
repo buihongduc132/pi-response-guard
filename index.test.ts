@@ -384,13 +384,57 @@ describe("pi-response-guard extension", () => {
 		await expect(emit("session_start", {} as any)).resolves.toBeUndefined();
 	});
 
-	it("skips retry when config.enabled is false", async () => {
+	it("skips retry when config.enabled is false (project config)", async () => {
 		const { pi, sendUserMessage } = createMockPi();
 		const handlers: Record<string, Function[]> = {};
-		// Point to a path with a config that has enabled: false
-		// Since we can't easily create a temp config file in tests,
-		// we test the code path indirectly: the default config has enabled: true
-		// so this test verifies the early-return path exists
+
+		// Create a real temp project dir with a `.pi-response-guard.json`
+		// that has `enabled: false`. resolveConfigPath checks PROJECT_CONFIG_CANDIDATES
+		// in cwd first, so this is found BEFORE the global/bundled config.
+		const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+		const { tmpdir } = await import("node:os");
+		const { join } = await import("node:path");
+		const tmpDir = mkdtempSync(join(tmpdir(), "pi-rg-disabled-"));
+		writeFileSync(join(tmpDir, ".pi-response-guard.json"), JSON.stringify({ enabled: false }));
+
+		(pi.on as ReturnType<typeof vi.fn>).mockImplementation((event: string, handler: Function) => {
+			if (!handlers[event]) handlers[event] = [];
+			handlers[event].push(handler);
+		});
+
+		try {
+			const mod = await import("./index");
+			mod.default(pi);
+
+			const notify = vi.fn();
+			const ctx = {
+				hasUI: true,
+				ui: { notify },
+				cwd: tmpDir,
+				isIdle: () => true,
+				hasPendingMessages: () => false,
+			};
+
+			// A retryable assistant message — but enabled:false must short-circuit
+			// by resetting counters and returning BEFORE sendUserMessage.
+			for (const fn of handlers["message_end"] ?? []) {
+				await fn(
+					{ message: { role: "assistant", stopReason: "error", errorMessage: "fetch failed" } },
+					ctx,
+				);
+			}
+
+			expect(sendUserMessage).not.toHaveBeenCalled();
+			expect(notify).not.toHaveBeenCalled();
+		} finally {
+			rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("does NOT notify when context hasUI is false, but still sends retry", async () => {
+		const { pi, sendUserMessage, notify } = createMockPi();
+		const handlers: Record<string, Function[]> = {};
+
 		(pi.on as ReturnType<typeof vi.fn>).mockImplementation((event: string, handler: Function) => {
 			if (!handlers[event]) handlers[event] = [];
 			handlers[event].push(handler);
@@ -399,11 +443,12 @@ describe("pi-response-guard extension", () => {
 		const mod = await import("./index");
 		mod.default(pi);
 
-		// Normal flow: enabled config → should retry
+		// hasUI:false → safeNotify must early-return (no notify call),
+		// but sendUserMessage still runs.
 		const ctx = {
-			hasUI: true,
-			ui: { notify: vi.fn() },
-			cwd: "/tmp",
+			hasUI: false,
+			ui: { notify },
+			cwd: "/tmp/test-project",
 			isIdle: () => true,
 			hasPendingMessages: () => false,
 		};
@@ -415,6 +460,7 @@ describe("pi-response-guard extension", () => {
 			);
 		}
 
-		expect(sendUserMessage).toHaveBeenCalled();
+		expect(sendUserMessage).toHaveBeenCalledWith("continue");
+		expect(notify).not.toHaveBeenCalled();
 	});
 });
